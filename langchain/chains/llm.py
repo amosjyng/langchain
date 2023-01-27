@@ -1,5 +1,5 @@
 """Chain that just formats a prompt and calls an LLM."""
-from typing import Any, Dict, List, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from pydantic import BaseModel, Extra
 
@@ -29,6 +29,8 @@ class LLMChain(Chain, BaseModel):
     llm: BaseLLM
     """LLM wrapper to use."""
     output_key: str = "text"  #: :meta private:
+    stop: Optional[str] = None
+    """Default stop if none is provided at generation time"""
 
     class Config:
         """Configuration for this pydantic object."""
@@ -69,6 +71,8 @@ class LLMChain(Chain, BaseModel):
                     "If `stop` is present in any inputs, should be present in all."
                 )
             prompts.append(prompt)
+        if not stop and self.stop:
+            stop = self.stop
         response = self.llm.generate(prompts, stop=stop)
         return response
 
