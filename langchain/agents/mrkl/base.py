@@ -2,17 +2,21 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, List, NamedTuple, Optional, Tuple
+from collections import OrderedDict
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple
 
 from langchain.agents.agent import Agent, AgentExecutor
 from langchain.agents.mrkl.prompt import FORMAT_INSTRUCTIONS, PREFIX, SUFFIX
 from langchain.agents.tools import Tool
 from langchain.callbacks.base import BaseCallbackManager
 from langchain.chains import LLMChain
+from langchain.chains.multiple_outputs import GetMultipleOutputsChain
 from langchain.llms.base import BaseLLM
 from langchain.prompts import PromptTemplate
+from langchain.prompts.base import DictOutputParser
+from langchain.schema import AgentAction
 
-FINAL_ANSWER_ACTION = "Final Answer:"
+FINAL_ANSWER_ACTION = 'Action: "Final Answer"'
 
 
 class ChainConfig(NamedTuple):
@@ -37,19 +41,36 @@ def get_action_and_input(llm_output: str) -> Tuple[str, str]:
     The string starting with "Action:" and the following string starting
     with "Action Input:" should be separated by a newline.
     """
-    if FINAL_ANSWER_ACTION in llm_output:
-        return "Final Answer", llm_output.split(FINAL_ANSWER_ACTION)[-1].strip()
-    regex = r"Action: (.*?)\nAction Input: (.*)"
+    regex = r"(?s)Action: \"?(.*?)\"?\nAction Input:\s*\"?(.*)\"?"
     match = re.search(regex, llm_output)
     if not match:
         raise ValueError(f"Could not parse LLM output: `{llm_output}`")
     action = match.group(1).strip()
     action_input = match.group(2)
-    return action, action_input.strip(" ").strip('"')
+    return action, action_input.strip().strip('"')
+
+
+class OneStepParser(DictOutputParser):
+    def parse(self, text: str) -> Dict[str, str]:
+        action, input = get_action_and_input(text)
+        regex = r"^(.*?)\"?\nAction:"
+        match = re.search(regex, text)
+        if match:
+            thought = match.group(1).strip()
+        else:
+            thought = ""
+        result= {
+            "action": action,
+            "input": input,
+            "thought": thought,
+        }
+        return result
 
 
 class ZeroShotAgent(Agent):
     """Agent for the MRKL chain."""
+
+    one_step_inputs: bool = False
 
     @property
     def _agent_type(self) -> str:
@@ -64,7 +85,7 @@ class ZeroShotAgent(Agent):
     @property
     def llm_prefix(self) -> str:
         """Prefix to append the llm call with."""
-        return "Thought:"
+        return ""
 
     @classmethod
     def create_prompt(
@@ -86,8 +107,18 @@ class ZeroShotAgent(Agent):
         Returns:
             A PromptTemplate with the template assembled from the pieces here.
         """
+        tools = tools + [
+            Tool(
+                name="Final Answer",
+                func=lambda _: "This is only a dummy tool",
+                description=(
+                    "Useful for when you have figured out the final answer. The input "
+                    "should be the answer, phrased as a sentence, in string form."
+                ),
+            )
+        ]
         tool_strings = "\n".join([f"{tool.name}: {tool.description}" for tool in tools])
-        tool_names = ", ".join([tool.name for tool in tools])
+        tool_names = ", ".join(["\"" + tool.name + "\"" for tool in tools])
         format_instructions = FORMAT_INSTRUCTIONS.format(tool_names=tool_names)
         template = "\n\n".join([prefix, tool_strings, format_instructions, suffix])
         if input_variables is None:
@@ -129,6 +160,34 @@ class ZeroShotAgent(Agent):
 
     def _extract_tool_and_input(self, text: str) -> Optional[Tuple[str, str]]:
         return get_action_and_input(text)
+
+    def _get_next_action(self, full_inputs: Dict[str, str]) -> AgentAction:
+        selected_inputs = {
+            k: full_inputs[k] for k in self.llm_chain.prompt.input_variables
+        }
+        prefix = self.llm_chain.prompt.format(**selected_inputs)
+        variables = OrderedDict(
+            Thought="thought",
+            Action="action"
+        )
+        variables["Action Input"] = "input"
+        chain = GetMultipleOutputsChain(
+            llm=self.llm_chain.llm,
+            prefix=prefix,
+            variables=variables,
+            one_step=self.one_step_inputs,
+            output_parser=OneStepParser(),
+            callback_manager=self.llm_chain.callback_manager,
+            verbose=self.llm_chain.verbose,
+            stop="Observation:"
+        )
+        return self._result_to_action(chain)
+
+    def _result_to_action(self, chain: GetMultipleOutputsChain) -> AgentAction:
+        results = chain({})
+        action = results["action"]
+        input = results["input"]
+        return AgentAction(tool=action, tool_input=input, log=chain.log())
 
 
 class MRKLChain(AgentExecutor):
