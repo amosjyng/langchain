@@ -8,13 +8,16 @@ from tests.unit_tests.prompts.fake_parser import FakeDictParser
 def test_multiple_outputs_can_run() -> None:
     """Test that GetMultipleOutputsChain can run successfully with multiple steps."""
     chain = GetMultipleOutputsChain(
-        llm=FakeLLM(),
+        llm=FakeLLM(
+            ensure_and_remove_stop=True,
+            sequenced_responses=['fake tool"', 'fake input"'],
+        ),
         prefix="Figure out what to do next.\n\n",
         variables={"Action": "tool", "Action Input": "tool_input"},
     )
     assert chain({}) == {
-        "tool": "bar",
-        "tool_input": "bar",
+        "tool": "fake tool",
+        "tool_input": "fake input",
     }
 
 
