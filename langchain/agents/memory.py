@@ -1,7 +1,7 @@
 """Agent state data."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel
 
@@ -40,22 +40,27 @@ class BaseAgentMemory(BaseModel, ABC):
         """
 
 
-class AgentMemory(BaseAgentMemory):
+class AgentMemory(BaseAgentMemory, BaseModel):
     """Default Agent memory that assumes StepOutput type for all steps."""
 
-    _steps: List[StepOutput] = []
+    m_steps: List[StepOutput] = []
+
+    def __init__(self, _steps: Optional[List[StepOutput]] = None, **kwargs: Any):
+        """Initialize AgentMemory with default fresh new list of steps."""
+        super().__init__(_steps=_steps or [], **kwargs)
+        self.m_steps = []
 
     def add_step(self, output: StepOutput) -> None:
         """Add step output to memory."""
-        self._steps.append(output)
+        self.m_steps.append(output)
 
     def steps(self) -> Sequence[StepOutput]:
         """Return all steps so far."""
-        return self._steps
+        return self.m_steps
 
     def as_intermediate_steps(self) -> List[Tuple[AgentAction, str]]:
         """Return intermediate steps in unstructured form.
 
         For backwards compatibility.
         """
-        return [output.as_intermediate_step() for output in self._steps]
+        return [output.as_intermediate_step() for output in self.m_steps]

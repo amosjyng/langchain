@@ -48,6 +48,8 @@ class StepOutput(BaseModel):
 
     def as_intermediate_step(self) -> Tuple[AgentAction, str]:
         """Compatibility function for existing action-observation tuple."""
-        assert isinstance(self.decision, AgentAction)
+        # weird subclassing with tuples means that a subclassed AgentAction doesn't
+        # appear to be an instance of AgentAction anymore
+        assert not isinstance(self.decision, AgentFinish)
         assert self.observation is not None  # should follow from first assert
         return (self.decision, self.observation)

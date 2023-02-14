@@ -48,16 +48,16 @@ class VariableConfig:
     }
     ```
     """
-    stop: str = '"'
+    stop: str = "\n"
     """The character to stop at when completing the value for this variable.
 
-    This defaults to a single double-quote, so that if your prompt goes
+    This defaults to a single newline, so that if your prompt goes
 
-    Action Input: "
+    Action Input:
 
-    then the LLM can know to terminate its input with a double-quote. If you expect the
-    output to be multiline, then you may instead want to go with ''' or ```, and adjust
-    the display string accordingly
+    then the LLM only fills in the rest of this line. If you expect the output to be
+    multiline, then you may instead want to go with ''' or ```, and adjust the display
+    string accordingly.
 
     This exists here instead of MultipleOutputsPrompter so that each variable can have
     its own custom stop if needed.
@@ -86,7 +86,20 @@ class VariableConfig:
         This is a templating string, so it won't have the actual value of the variable,
         just a marker for the template to eventually fill it in with.
         """
-        return self.prompt + "{" + self.output_key + "}" + self.stop
+        without_stop = self.prompt + "{" + self.output_key + "}"
+        if self.stop == "\n":
+            return without_stop
+        return without_stop + self.stop
+
+    @classmethod
+    def quoted(cls: Type[VC], output_key: str, display: str) -> VC:
+        """Have the LLM enclose the value in quotes."""
+        return cls(
+            output_key=output_key,
+            display=display,
+            display_suffix=': "',
+            stop='"',
+        )
 
     @classmethod
     def for_code(

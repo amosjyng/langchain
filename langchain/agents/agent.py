@@ -469,7 +469,11 @@ class AgentExecutor(Chain, BaseModel):
 
     def new_agent_memory(self, inputs: Dict[str, str]) -> BaseAgentMemory:
         """Initialize new agent memory for a new run."""
-        return AgentMemory(inputs=inputs)
+        memory = AgentMemory(inputs=inputs)
+        # todo: pydantic is not creating empty memory properly
+        #memory._steps = []
+        assert memory.m_steps == [], "New memory not empty"
+        return memory
 
     def _call(self, inputs: Dict[str, str]) -> Dict[str, Any]:
         """Run text through and get agent response."""

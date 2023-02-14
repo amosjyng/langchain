@@ -78,7 +78,7 @@ class MultipleOutputsPrompter(BaseModel):
             new_configs = []
             for variable in variable_configs:
                 if variable.display_suffix is None:
-                    new_suffix = f": {variable.stop}"
+                    new_suffix = ": "
                 else:
                     new_suffix = variable.display_suffix  # keep the old one
                 new_configs.append(

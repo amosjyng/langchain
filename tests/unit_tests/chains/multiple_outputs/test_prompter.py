@@ -24,8 +24,7 @@ def test_prompter_with_defaults() -> None:
         == """
 Figure out what to do next.
 
-Action: "
-    """.strip()
+Action: """.lstrip()
     )
 
     second_prompt_template = prompter.prompt_template_for_variable_at(1)
@@ -36,9 +35,8 @@ Action: "
         == """
 Figure out what to do next.
 
-Action: "Search"
-Action Input: "
-    """.strip()
+Action: Search
+Action Input: """.lstrip()
     )
 
 
@@ -60,8 +58,7 @@ def test_prompter_without_auto_suffixing() -> None:
         == """
 Figure out what to do next.
 
-Action: "
-    """.strip()
+Action: """.lstrip()
     )
 
     second_prompt_template = prompter.prompt_template_for_variable_at(1)
@@ -72,9 +69,8 @@ Action: "
         == """
 Figure out what to do next.
 
-Action: "Search"
-Action Input: "
-    """.strip()
+Action: Search
+Action Input: """.strip()
     )
 
 
@@ -84,13 +80,14 @@ def test_prompter_with_specified_variables() -> None:
         prefix="Write some code.\n\n",
         variable_configs=[
             VariableConfig(display="File Path", output_key="path"),
-            VariableConfig(display="Code", output_key="code", stop="```"),
-            VariableConfig(display="Tests", output_key="test_code", stop="```"),
+            VariableConfig.for_code(display="Code", output_key="code"),
+            VariableConfig.for_code(display="Tests", output_key="test_code"),
         ],
         # also test that output parser doesn't leak into templates by default
         output_parser=FakeDictParser(),
     )
 
+    assert prompter.variables[0].prompt.endswith(": ")
     first_prompt_template = prompter.prompt_template_for_variable_at(0)
     assert first_prompt_template.output_parser is None
     first_prompt = first_prompt_template.format()
@@ -99,8 +96,7 @@ def test_prompter_with_specified_variables() -> None:
         == """
 Write some code.
 
-File Path: "
-    """.strip()
+File Path: """.lstrip()
     )
 
     second_prompt_template = prompter.prompt_template_for_variable_at(1)
@@ -111,28 +107,28 @@ File Path: "
         == """
 Write some code.
 
-File Path: "my_module/functionality.py"
+File Path: my_module/functionality.py
 Code: ```
-""".strip()
+""".lstrip()
     )
 
     third_prompt_template = prompter.prompt_template_for_variable_at(2)
     third_prompt = third_prompt_template.format(
         path="my_module/functionality.py",
-        code="""\ndef do_something():\n    print("Hello world!")\n""",
+        code="""def do_something():\n    print("Hello world!")\n""",
     )
     assert (
         third_prompt
         == """
 Write some code.
 
-File Path: "my_module/functionality.py"
+File Path: my_module/functionality.py
 Code: ```
 def do_something():
     print("Hello world!")
 ```
 Tests: ```
-""".strip()
+""".lstrip()
     )
 
 
